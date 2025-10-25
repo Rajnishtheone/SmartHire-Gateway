@@ -39,3 +39,34 @@ def has_meaningful_content(text: str, min_alpha: int = 40, min_ratio: float = 0.
         return False
     alpha_count = sum(char.isalpha() for char in text)
     return alpha_count >= min_alpha and (alpha_count / max(len(text), 1)) >= min_ratio
+
+
+PDF_NOISE_TOKENS = {
+    "/type",
+    "/font",
+    "/length",
+    "/filter",
+    "/color",
+    "/xobject",
+    "/resources",
+    "/procset",
+    "/device",
+    "/pattern",
+    "/structparents",
+    "/parent",
+    "/bpc",
+}
+
+
+def looks_like_pdf_metadata(text: str) -> bool:
+    if not text:
+        return True
+    lowered = text.lower()
+    slash_count = lowered.count("/")
+    if slash_count >= 8:
+        return True
+    noise_hits = sum(token in lowered for token in PDF_NOISE_TOKENS)
+    if noise_hits >= 3:
+        return True
+    non_word_ratio = sum(1 for ch in lowered if not ch.isalnum() and ch not in {" ", ",", ".", "-", "\n"}) / max(len(lowered), 1)
+    return non_word_ratio > 0.2

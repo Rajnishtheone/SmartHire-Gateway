@@ -80,13 +80,17 @@ class OCRService:
         try:
             text = resume_extractors.extract_text_from_pdf(path)
             cleaned = text_cleaning.strip_non_printable(text)
-            if text_cleaning.has_meaningful_content(cleaned):
+            if text_cleaning.has_meaningful_content(cleaned) and not text_cleaning.looks_like_pdf_metadata(cleaned):
                 return cleaned
-            logger.info("Structured PDF extract produced low quality output; switching to OCR for %s", path.name)
+            logger.info(
+                "Structured PDF extract produced low quality output (len=%s); switching to OCR for %s",
+                len(cleaned),
+                path.name,
+            )
         except Exception as exc:
             logger.warning("Structured PDF extraction failed: %s", exc)
 
-        images = convert_from_path(path)
+        images = convert_from_path(path, dpi=300)
         text_chunks = [text_cleaning.strip_non_printable(pytesseract.image_to_string(image)) for image in images]
         return "\n".join(text_chunks)
 
