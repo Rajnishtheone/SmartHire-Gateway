@@ -56,7 +56,7 @@ class WhatsAppService:
         if self._client and self.settings.twilio_whatsapp_from:
             to_number = payload.get("From")
             if to_number:
-                self._send_auto_reply(to_number, record.full_name or "there")
+                self._send_auto_reply(to_number, record.full_name)
 
     def _extract_attachments(self, payload: Dict[str, str]) -> List[AttachmentPayload]:
         count = int(payload.get("NumMedia", "0") or "0")
@@ -85,9 +85,16 @@ class WhatsAppService:
             return None
         return base64.b64encode(response.content).decode("utf-8")
 
-    def _send_auto_reply(self, to_number: str, name: str) -> None:
+    def _send_auto_reply(self, to_number: str, name: Optional[str]) -> None:
+        safe_name = (name or "").strip()
+        if safe_name:
+            safe_name = "".join(char for char in safe_name if char.isprintable())
+            safe_name = safe_name.splitlines()[0].strip()
+        if not safe_name or len(safe_name) < 2:
+            safe_name = "there"
+
         message = (
-            f"Hi {name}, we've received your resume! Thank you for your interest in SmartHire Gateway. "
+            f"Hi {safe_name}, we've received your resume! Thank you for your interest in SmartHire Gateway. "
             "Our team is currently reviewing your application and will be in touch about the next steps."
         )
         from_number = self.settings.twilio_whatsapp_from or ""
