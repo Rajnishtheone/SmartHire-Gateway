@@ -39,6 +39,7 @@ class Settings(BaseSettings):
     twilio_validation_token: str | None = None
 
     openai_api_key: str | None = None
+    openai_model: str | None = "gpt-4o-mini"
 
     google_service_account_json: str | None = None
     google_sheets_id: str | None = None

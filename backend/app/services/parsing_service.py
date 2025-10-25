@@ -13,6 +13,7 @@ from ..models.request_models import AttachmentPayload
 from ..models.response_models import CandidateRecord
 from ..utils import text_cleaning
 from .ocr_service import AttachmentResult, OCRService
+from .ai_parser_service import AIParsingService, AIParseResult
 
 logger = logging.getLogger("smarthire.parsing")
 
@@ -22,10 +23,14 @@ class ParsingService:
         self,
         settings: Settings | None = None,
         ocr_service: OCRService | None = None,
+        ai_parser_service: AIParsingService | None = None,
     ) -> None:
         self.settings = settings or get_settings()
         self.ocr_service = ocr_service or OCRService(settings=self.settings)
         self._nlp = self._load_nlp_model()
+        self.ai_parser = ai_parser_service or (
+            AIParsingService(settings=self.settings) if self.settings.openai_api_key else None
+        )
         self.skill_library = [
             "python",
             "django",
@@ -77,7 +82,7 @@ class ParsingService:
         location = text_cleaning.sanitize_text(locations[0]) if locations else None
         last_job = text_cleaning.sanitize_text(organizations[0]) if organizations else None
 
-        return CandidateRecord(
+        record = CandidateRecord(
             full_name=full_name or None,
             email=email,
             phone=phone,
@@ -91,6 +96,27 @@ class ParsingService:
             confidence=confidence,
             notes=f"attachments: {[res.filename for res in attachment_results]}",
         )
+
+        if self.ai_parser and self.ai_parser.is_enabled():
+            should_enrich = not record.full_name or not record.email or not record.phone
+            if should_enrich:
+                ai_result = self.ai_parser.enrich(
+                    combined_text,
+                    {
+                        "full_name": record.full_name,
+                        "email": record.email,
+                        "phone": record.phone,
+                        "location": record.location,
+                        "skills": record.skills,
+                        "education": record.education,
+                        "experience": record.experience,
+                        "last_job_title": record.last_job_title,
+                    },
+                )
+                if ai_result:
+                    self._merge_ai_result(record, ai_result)
+
+        return record
 
     def _combine_text(self, body_text: str, attachments: List[AttachmentResult]) -> str:
         segments = [body_text]
@@ -120,6 +146,25 @@ class ParsingService:
         base = 0.3 if body_text else 0.1
         attachment_boost = sum(result.confidence for result in attachments) / max(len(attachments), 1) if attachments else 0
         return min(1.0, base + attachment_boost)
+
+    @staticmethod
+    def _merge_ai_result(record: CandidateRecord, result: AIParseResult) -> None:
+        if result.full_name:
+            record.full_name = result.full_name
+        if result.email:
+            record.email = result.email
+        if result.phone:
+            record.phone = text_cleaning.normalize_whitespace(result.phone)
+        if result.location:
+            record.location = result.location
+        if result.skills:
+            record.skills = sorted({*record.skills, *result.skills})
+        if result.education:
+            record.education = result.education
+        if result.experience:
+            record.experience = result.experience
+        if result.last_job_title:
+            record.last_job_title = result.last_job_title
 
     @staticmethod
     def _load_nlp_model() -> Language:
