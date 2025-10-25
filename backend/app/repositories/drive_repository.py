@@ -94,7 +94,12 @@ class DriveRepository:
                 file_metadata = {"name": filename, "parents": [self.settings.google_drive_folder_id]}
                 file = (
                     self._service.files()
-                    .create(body=file_metadata, media_body=media, fields="id,webViewLink")
+                    .create(
+                        body=file_metadata,
+                        media_body=media,
+                        fields="id,webViewLink",
+                        supportsAllDrives=True,
+                    )
                     .execute()
                 )
                 return file.get("webViewLink") or file.get("id")
