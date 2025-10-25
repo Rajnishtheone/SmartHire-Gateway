@@ -126,20 +126,31 @@ class SheetsRepository:
         if not self._local_path.exists():
             self._local_path.write_text(json.dumps([], indent=2))
 
+    @staticmethod
+    def _sheet_safe(value: str | None, protect_prefix: bool = False) -> str:
+        if value is None:
+            return ""
+        text = str(value)
+        if protect_prefix and text and text[0] in {"+", "-", "=", "@", "\t"}:
+            return f"'{text}"
+        if text and text[0] in {"=", "+", "-", "@"}:
+            return f"'{text}"
+        return text
+
     def append_candidate(self, record: CandidateRecord) -> None:
         row = [
             record.received_at.isoformat(),
-            record.full_name or "",
-            record.email or "",
-            record.phone or "",
-            record.location or "",
-            ", ".join(record.skills),
-            record.education or "",
-            record.experience or "",
-            record.last_job_title or "",
-            record.source,
+            self._sheet_safe(record.full_name),
+            self._sheet_safe(record.email),
+            self._sheet_safe(record.phone, protect_prefix=True),
+            self._sheet_safe(record.location),
+            self._sheet_safe(", ".join(record.skills)),
+            self._sheet_safe(record.education),
+            self._sheet_safe(record.experience),
+            self._sheet_safe(record.last_job_title),
+            self._sheet_safe(record.source),
             record.confidence or 0,
-            record.candidate_id,
+            self._sheet_safe(record.candidate_id),
             record.status.value,
         ]
         if self._worksheet:

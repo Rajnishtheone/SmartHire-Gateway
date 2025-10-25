@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Iterable, List, Optional
 
 EMAIL_REGEX = re.compile(r"(?i)([A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,})")
@@ -13,8 +14,25 @@ def normalize_whitespace(text: str) -> str:
 def strip_non_printable(text: str) -> str:
     return "".join(char if char.isprintable() else " " for char in text)
 
+def replace_ligatures(text: str) -> str:
+    ligatures = {
+        "\ufb00": "ff",
+        "\ufb01": "fi",
+        "\ufb02": "fl",
+        "\ufb03": "ffi",
+        "\ufb04": "ffl",
+        "\ufb05": "ft",
+        "\ufb06": "st",
+    }
+    for key, value in ligatures.items():
+        text = text.replace(key, value)
+    return text
+
 def sanitize_text(text: str) -> str:
-    return normalize_whitespace(strip_non_printable(text))
+    cleaned = replace_ligatures(strip_non_printable(text))
+    normalized = unicodedata.normalize("NFKC", cleaned)
+    return normalize_whitespace(normalized)
+
 
 def extract_email(text: str) -> Optional[str]:
     match = EMAIL_REGEX.search(text)
