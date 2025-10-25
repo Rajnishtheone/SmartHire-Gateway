@@ -34,11 +34,24 @@ def find_keywords(text: str, keywords: Iterable[str]) -> List[str]:
     text_lower = text.lower()
     return sorted({keyword for keyword in keywords if keyword.lower() in text_lower})
 
-def has_meaningful_content(text: str, min_alpha: int = 40, min_ratio: float = 0.05) -> bool:
+def has_meaningful_content(
+    text: str,
+    min_alpha: int = 40,
+    min_ratio: float = 0.05,
+    min_space_ratio: float = 0.015,
+) -> bool:
     if not text:
         return False
     alpha_count = sum(char.isalpha() for char in text)
-    return alpha_count >= min_alpha and (alpha_count / max(len(text), 1)) >= min_ratio
+    if alpha_count < min_alpha:
+        return False
+    ratio = alpha_count / max(len(text), 1)
+    if ratio < min_ratio:
+        return False
+    space_ratio = text.count(" ") / max(len(text), 1)
+    if space_ratio < min_space_ratio:
+        return False
+    return True
 
 
 PDF_NOISE_TOKENS = {
@@ -55,6 +68,8 @@ PDF_NOISE_TOKENS = {
     "/structparents",
     "/parent",
     "/bpc",
+    "/structparents",
+    "cid:",
 }
 
 
@@ -62,10 +77,12 @@ def looks_like_pdf_metadata(text: str) -> bool:
     if not text:
         return True
     lowered = text.lower()
+    if "cid:" in lowered:
+        return True
     slash_count = lowered.count("/")
     if slash_count >= 8:
         return True
-    noise_hits = sum(token in lowered for token in PDF_NOISE_TOKENS)
+    noise_hits = sum(lowered.count(token) for token in PDF_NOISE_TOKENS)
     if noise_hits >= 3:
         return True
     non_word_ratio = sum(1 for ch in lowered if not ch.isalnum() and ch not in {" ", ",", ".", "-", "\n"}) / max(len(lowered), 1)
