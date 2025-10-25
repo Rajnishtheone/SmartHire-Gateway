@@ -87,8 +87,8 @@ class WhatsAppService:
 
     def _send_auto_reply(self, to_number: str, name: str) -> None:
         message = (
-            f"Hello {name}, thanks for sending your resume to SmartHire Gateway. "
-            "Our recruitment team is reviewing your details and will reach out with next steps soon."
+            f"Hi {name}, we've received your resume! Thank you for your interest in SmartHire Gateway. "
+            "Our team is currently reviewing your application and will be in touch about the next steps."
         )
         from_number = self.settings.twilio_whatsapp_from or ""
         if not from_number:
