@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from pydantic import BaseModel, EmailStr, Field, HttpUrl
 
+from .response_models import CandidateStatus
+
 
 class LoginRequest(BaseModel):
     email: EmailStr
@@ -29,3 +31,7 @@ class RecruiterCreateRequest(BaseModel):
     email: EmailStr
     password: str = Field(min_length=6, max_length=128)
     name: str = Field(min_length=1, max_length=100)
+
+
+class CandidateStatusUpdateRequest(BaseModel):
+    status: CandidateStatus
