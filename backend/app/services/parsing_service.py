@@ -50,7 +50,7 @@ class ParsingService:
         attachments: Optional[List[AttachmentPayload]] = None,
         source: str = "whatsapp",
     ) -> CandidateRecord:
-        body_text = body or ""
+        body_text = text_cleaning.sanitize_text(body or "")
         attachment_results: List[AttachmentResult] = []
         if attachments:
             attachment_results = self.ocr_service.extract_from_attachments(attachments)
@@ -70,15 +70,22 @@ class ParsingService:
 
         confidence = self._score_confidence(body_text, attachment_results)
 
+        full_name = text_cleaning.sanitize_text(persons[0]) if persons else None
+        if full_name:
+            full_name = full_name.strip()
+
+        location = text_cleaning.sanitize_text(locations[0]) if locations else None
+        last_job = text_cleaning.sanitize_text(organizations[0]) if organizations else None
+
         return CandidateRecord(
-            full_name=persons[0] if persons else None,
+            full_name=full_name or None,
             email=email,
             phone=phone,
-            location=locations[0] if locations else None,
+            location=location or None,
             skills=skills,
             education=self._extract_education(combined_text),
             experience=experience_note,
-            last_job_title=organizations[0] if organizations else None,
+            last_job_title=last_job or None,
             source=source,
             received_at=datetime.now(timezone.utc),
             confidence=confidence,

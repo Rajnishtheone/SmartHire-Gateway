@@ -36,11 +36,12 @@ class OCRService:
             path = self._materialize_attachment(attachment)
             try:
                 text = self._extract_text(path, attachment.content_type)
-                confidence = self._score_confidence(text)
+                sanitized_text = text_cleaning.sanitize_text(text)
+                confidence = self._score_confidence(sanitized_text)
                 results.append(
                     AttachmentResult(
                         filename=attachment.filename or path.name,
-                        text=text_cleaning.normalize_whitespace(text),
+                        text=sanitized_text,
                         confidence=confidence,
                         content_type=attachment.content_type,
                     )
@@ -78,18 +79,20 @@ class OCRService:
     def _extract_from_pdf(self, path: Path) -> str:
         try:
             text = resume_extractors.extract_text_from_pdf(path)
-            if text.strip():
-                return text
+            cleaned = text_cleaning.strip_non_printable(text)
+            if text_cleaning.has_meaningful_content(cleaned):
+                return cleaned
+            logger.info("Structured PDF extract produced low quality output; switching to OCR for %s", path.name)
         except Exception as exc:
             logger.warning("Structured PDF extraction failed: %s", exc)
 
         images = convert_from_path(path)
-        text_chunks = [pytesseract.image_to_string(image) for image in images]
+        text_chunks = [text_cleaning.strip_non_printable(pytesseract.image_to_string(image)) for image in images]
         return "\n".join(text_chunks)
 
     def _extract_from_image(self, path: Path) -> str:
         with Image.open(path) as image:
-            return pytesseract.image_to_string(image)
+            return text_cleaning.strip_non_printable(pytesseract.image_to_string(image))
 
     @staticmethod
     def _score_confidence(text: str) -> float:
