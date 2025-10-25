@@ -135,7 +135,7 @@ const Dashboard = () => {
       });
       await refreshBoard();
     } catch (err) {
-      setError("Manual ingest failed.");
+      setBoardError("Manual ingest failed.");
     } finally {
       setTriggering(false);
     }
