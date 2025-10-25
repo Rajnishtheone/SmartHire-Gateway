@@ -77,26 +77,41 @@ class OCRService:
             return resume_extractors.extract_text_from_plain(path)
 
     def _extract_from_pdf(self, path: Path) -> str:
+        cleaned = ""
         try:
             text = resume_extractors.extract_text_from_pdf(path)
             cleaned = text_cleaning.strip_non_printable(text)
             if text_cleaning.has_meaningful_content(cleaned) and not text_cleaning.looks_like_pdf_metadata(cleaned):
                 return cleaned
             logger.info(
-                "Structured PDF extract produced low quality output (len=%s); switching to OCR for %s",
+                "Structured PDF extract produced low quality output (len=%s); attempting pdfminer for %s",
                 len(cleaned),
                 path.name,
             )
         except Exception as exc:
             logger.warning("Structured PDF extraction failed: %s", exc)
 
-        images = convert_from_path(path, dpi=300)
-        text_chunks = [text_cleaning.strip_non_printable(pytesseract.image_to_string(image)) for image in images]
+        pdfminer_text = resume_extractors.extract_text_from_pdfminer(path)
+        if pdfminer_text:
+            cleaned_pdfminer = text_cleaning.strip_non_printable(pdfminer_text)
+            if text_cleaning.has_meaningful_content(cleaned_pdfminer) and not text_cleaning.looks_like_pdf_metadata(
+                cleaned_pdfminer
+            ):
+                return cleaned_pdfminer
+            logger.info("pdfminer output still low quality; falling back to OCR for %s", path.name)
+
+        images = convert_from_path(path, dpi=300, fmt="png", thread_count=2)
+        text_chunks = [
+            text_cleaning.strip_non_printable(
+                pytesseract.image_to_string(image, config="--oem 3 --psm 6")
+            )
+            for image in images
+        ]
         return "\n".join(text_chunks)
 
     def _extract_from_image(self, path: Path) -> str:
         with Image.open(path) as image:
-            return text_cleaning.strip_non_printable(pytesseract.image_to_string(image))
+            return text_cleaning.strip_non_printable(pytesseract.image_to_string(image, config="--oem 3 --psm 6"))
 
     @staticmethod
     def _score_confidence(text: str) -> float:

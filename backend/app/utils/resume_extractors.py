@@ -5,6 +5,11 @@ from pathlib import Path
 import pdfplumber
 from docx import Document
 
+try:
+    from pdfminer.high_level import extract_text as pdfminer_extract_text
+except ImportError:  # pragma: no cover - optional dependency
+    pdfminer_extract_text = None  # type: ignore
+
 
 def extract_text_from_pdf(path: Path) -> str:
     text_chunks: list[str] = []
@@ -13,6 +18,15 @@ def extract_text_from_pdf(path: Path) -> str:
             extracted = page.extract_text() or ""
             text_chunks.append(extracted)
     return "\n".join(text_chunks)
+
+
+def extract_text_from_pdfminer(path: Path) -> str:
+    if pdfminer_extract_text is None:
+        return ""
+    try:
+        return pdfminer_extract_text(path)
+    except Exception:
+        return ""
 
 
 def extract_text_from_docx(path: Path) -> str:
