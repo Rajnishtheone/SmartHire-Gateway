@@ -45,23 +45,60 @@ class SheetsRepository:
         except (ValueError, FileNotFoundError) as exc:
             logger.warning("Failed to load Google credentials (%s); falling back to local storage.", exc)
             return None
-        credentials = Credentials.from_service_account_info(service_info, scopes=SCOPES)
-        client = gspread.authorize(credentials)
-        spreadsheet = client.open_by_key(self.settings.google_sheets_id)
-        worksheet = spreadsheet.sheet1
-        self._ensure_header_row(worksheet)
-        return worksheet
+
+        try:
+            credentials = Credentials.from_service_account_info(service_info, scopes=SCOPES)
+            client = gspread.authorize(credentials)
+            spreadsheet = client.open_by_key(self.settings.google_sheets_id)
+            worksheet = spreadsheet.sheet1
+            self._ensure_header_row(worksheet)
+            return worksheet
+        except Exception as exc:  # pragma: no cover - runtime protection
+            logger.warning("Unable to connect to Google Sheet (%s); using local storage.", exc)
+            return None
 
     def _load_service_account_info(self, raw: str) -> dict:
         if not raw or not raw.strip():
             raise ValueError("Empty Google service account configuration")
-        path = Path(raw)
+
+        cleaned = raw.strip().strip('"').strip("'")
+
+        if cleaned.startswith("{") or cleaned.startswith("["):
+            try:
+                return json.loads(cleaned)
+            except json.JSONDecodeError:
+                logger.debug("Service account string is not valid JSON; attempting to resolve as a path.")
+
+        candidates: list[Path] = []
+        raw_path = Path(cleaned)
+        if raw_path.is_absolute():
+            candidates.append(raw_path)
+        else:
+            candidates.append(raw_path)
+            base_dir = Path(__file__).resolve().parents[3]
+            candidates.append(Path.cwd() / raw_path)
+            candidates.append(base_dir / raw_path)
+            candidates.append(base_dir / raw_path.name)
+
+        seen: set[Path] = set()
+        for candidate in candidates:
+            try:
+                resolved = candidate.resolve(strict=False)
+            except FileNotFoundError:
+                resolved = candidate
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            if resolved.exists():
+                try:
+                    return json.loads(resolved.read_text())
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Invalid JSON in {resolved}") from exc
+
         try:
-            if path.exists():
-                return json.loads(path.read_text())
-            return json.loads(raw)
+            return json.loads(cleaned)
         except json.JSONDecodeError as exc:
-            raise ValueError("Invalid Google service account JSON") from exc
+            raise ValueError("Invalid Google service account JSON or path") from exc
 
     def _ensure_header_row(self, worksheet) -> None:
         header = worksheet.row_values(1)

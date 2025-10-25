@@ -33,31 +33,73 @@ class DriveRepository:
             logger.warning("googleapiclient not installed; using local archive.")
             return None
 
-        info = self._load_service_account_info(self.settings.google_service_account_json)
-        credentials = Credentials.from_service_account_info(
-            info,
-            scopes=["https://www.googleapis.com/auth/drive.file"],
-        )
+        try:
+            info = self._load_service_account_info(self.settings.google_service_account_json)
+        except (FileNotFoundError, ValueError) as exc:
+            logger.warning("Unable to load Google Drive credentials (%s); falling back to local archive.", exc)
+            return None
+
+        credentials = Credentials.from_service_account_info(info, scopes=["https://www.googleapis.com/auth/drive.file"])
         return build("drive", "v3", credentials=credentials)
 
     def _load_service_account_info(self, raw: str) -> dict:
-        path = Path(raw)
-        if path.exists():
-            return json.loads(path.read_text())
-        return json.loads(raw)
+        if not raw or not raw.strip():
+            raise ValueError("Google service account configuration is empty")
+
+        cleaned = raw.strip().strip('"').strip("'")
+
+        if cleaned.startswith("{") or cleaned.startswith("["):
+            try:
+                return json.loads(cleaned)
+            except json.JSONDecodeError:
+                logger.debug("Provided Google credentials string is not valid JSON; trying as path.")
+
+        candidates: list[Path] = []
+        raw_path = Path(cleaned)
+        if raw_path.is_absolute():
+            candidates.append(raw_path)
+        else:
+            candidates.append(raw_path)
+            base_dir = Path(__file__).resolve().parents[3]
+            candidates.append(Path.cwd() / raw_path)
+            candidates.append(base_dir / raw_path)
+            candidates.append(base_dir / raw_path.name)
+
+        seen: set[Path] = set()
+        for candidate in candidates:
+            try:
+                resolved = candidate.resolve(strict=False)
+            except FileNotFoundError:
+                resolved = candidate
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            if resolved.exists():
+                try:
+                    return json.loads(resolved.read_text())
+                except json.JSONDecodeError as exc:
+                    raise ValueError(f"Invalid JSON in {resolved}") from exc
+
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            raise ValueError("Provided Google service account value is not valid JSON or path") from exc
 
     def archive_bytes(self, filename: str, data: bytes, mime_type: str = "application/octet-stream") -> str:
         if self._service:
             from io import BytesIO
 
-            media = MediaIoBaseUpload(BytesIO(data), mimetype=mime_type)
-            file_metadata = {"name": filename, "parents": [self.settings.google_drive_folder_id]}
-            file = (
-                self._service.files()
-                .create(body=file_metadata, media_body=media, fields="id,webViewLink")
-                .execute()
-            )
-            return file.get("webViewLink") or file.get("id")
+            try:
+                media = MediaIoBaseUpload(BytesIO(data), mimetype=mime_type)
+                file_metadata = {"name": filename, "parents": [self.settings.google_drive_folder_id]}
+                file = (
+                    self._service.files()
+                    .create(body=file_metadata, media_body=media, fields="id,webViewLink")
+                    .execute()
+                )
+                return file.get("webViewLink") or file.get("id")
+            except Exception as exc:  # pragma: no cover - runtime protection
+                logger.warning("Google Drive upload failed (%s); storing locally instead.", exc)
 
         destination = self._local_dir / filename
         destination.write_bytes(data)
