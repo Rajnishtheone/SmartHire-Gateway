@@ -6,6 +6,11 @@ import pdfplumber
 from docx import Document
 
 try:
+    import fitz  # PyMuPDF
+except ImportError:  # pragma: no cover - optional dependency
+    fitz = None  # type: ignore
+
+try:
     from pdfminer.high_level import extract_text as pdfminer_extract_text
 except ImportError:  # pragma: no cover - optional dependency
     pdfminer_extract_text = None  # type: ignore
@@ -22,6 +27,16 @@ def extract_text_from_pdf(path: Path) -> str:
 
 def extract_text_from_pdfminer(path: Path) -> str:
     if pdfminer_extract_text is None:
+        return ""
+
+
+def extract_text_from_pymupdf(path: Path) -> str:
+    if fitz is None:
+        return ""
+    try:
+        with fitz.open(path) as document:
+            return "\n".join(page.get_text("text") for page in document)
+    except Exception:
         return ""
     try:
         return pdfminer_extract_text(path)

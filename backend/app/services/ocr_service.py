@@ -98,7 +98,16 @@ class OCRService:
                 cleaned_pdfminer
             ):
                 return cleaned_pdfminer
-            logger.info("pdfminer output still low quality; falling back to OCR for %s", path.name)
+            logger.info("pdfminer output still low quality; trying PyMuPDF for %s", path.name)
+
+        pymupdf_text = resume_extractors.extract_text_from_pymupdf(path)
+        if pymupdf_text:
+            cleaned_pymupdf = text_cleaning.strip_non_printable(pymupdf_text)
+            if text_cleaning.has_meaningful_content(cleaned_pymupdf) and not text_cleaning.looks_like_pdf_metadata(
+                cleaned_pymupdf
+            ):
+                return cleaned_pymupdf
+            logger.info("PyMuPDF output still low quality; falling back to OCR for %s", path.name)
 
         images = convert_from_path(path, dpi=300, fmt="png", thread_count=2)
         text_chunks = [
