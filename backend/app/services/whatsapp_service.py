@@ -90,10 +90,16 @@ class WhatsAppService:
             f"Hi {name}, thanks for sharing your resume with SmartHire Gateway. "
             "Our recruiters will review it shortly."
         )
+        from_number = self.settings.twilio_whatsapp_from or ""
+        if not from_number:
+            logger.debug("Twilio sender number not configured; skipping auto reply.")
+            return
+        if not from_number.startswith("whatsapp:"):
+            from_number = f"whatsapp:{from_number}"
         try:
             self._client.messages.create(
                 body=message,
-                from_=f"whatsapp:{self.settings.twilio_whatsapp_from}",
+                from_=from_number,
                 to=to_number,
             )
         except Exception as exc:  # pragma: no cover - network path

@@ -101,6 +101,7 @@ class DriveRepository:
             except Exception as exc:  # pragma: no cover - runtime protection
                 logger.warning("Google Drive upload failed (%s); storing locally instead.", exc)
 
+        self._local_dir.mkdir(parents=True, exist_ok=True)
         destination = self._local_dir / filename
         destination.write_bytes(data)
         return str(destination)
