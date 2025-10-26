@@ -74,6 +74,24 @@ class WhatsAppService:
                     content=self._download_media_base64(media_url),
                 )
             )
+        if attachments:
+            return attachments
+        message_sid = payload.get("MessageSid")
+        if self._client and message_sid:
+            try:
+                media_items = self._client.messages(message_sid).media.list()
+                for media in media_items:
+                    media_url = f"https://api.twilio.com{media.uri.replace('.json', '')}"
+                    attachments.append(
+                        AttachmentPayload(
+                            url=media_url,
+                            content_type=getattr(media, "content_type", None),
+                            filename=getattr(media, "file_name", None) or f"{media.sid}",
+                            content=self._download_media_base64(media_url),
+                        )
+                    )
+            except Exception as exc:  # pragma: no cover - network dependent
+                logger.warning("Failed to fetch media list for %s: %s", message_sid, exc)
         return attachments
 
     def _download_media_base64(self, url: str) -> Optional[str]:

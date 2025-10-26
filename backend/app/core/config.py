@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     @validator("backend_cors_origins", pre=True)
     def assemble_cors_origins(cls, value: Any) -> list[str]:
         origins: set[str] = set()
+        default_origins = {"http://localhost:5173", "http://127.0.0.1:5173"}
         if isinstance(value, list):
             source = [str(item) for item in value]
         elif isinstance(value, str) and value:
@@ -68,6 +69,9 @@ class Settings(BaseSettings):
                 continue
             origins.add(normalized)
             origins.add(f"{normalized}/")
+        if not origins:
+            origins = {cls._normalize_origin(item) for item in default_origins}
+            origins = {item for item in origins if item}
         return sorted(origins)
         return []
 
@@ -76,7 +80,7 @@ class Settings(BaseSettings):
         cors = values.get("backend_cors_origins") or []
         if value:
             return [cls._normalize_origin(str(item)) for item in value if str(item).strip()]
-        return cors
+        return cors or ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     @validator("debug", pre=True)
     def coerce_debug(cls, value: Any) -> bool:
